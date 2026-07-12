@@ -605,33 +605,100 @@ function addPopup(x, y, text, color, size) {
 // ------------------------------------------------------------
 // Drawing helpers
 // ------------------------------------------------------------
+// Squash / stretch / wobble applied to the whole face (photos included)
+// so every expression is animated and silly.
+function exprFx(expr, isCat) {
+  const t = game.frame;
+  if (isCat) {
+    switch (expr) {
+      case 'laughing': return { sx: 1 + Math.sin(t * 0.4) * 0.09, sy: 1 - Math.sin(t * 0.4) * 0.13, rot: 0 };
+      case 'scared':   return { sx: 0.85, sy: 1.22, rot: Math.sin(t * 0.8) * 0.07 };
+      case 'guilty':   return { sx: 1.05, sy: 0.9, rot: 0.1 };
+      case 'proud':    return { sx: 1.12, sy: 1.12, rot: 0 };
+      case 'sleepy':   return { sx: 1.05, sy: 0.9 + Math.sin(t * 0.05) * 0.04, rot: 0.12 };
+      default: return null;
+    }
+  }
+  switch (expr) {
+    case 'shocked':    return { sx: 0.85, sy: 1.28, rot: Math.sin(t * 0.9) * 0.06 };
+    case 'laughing':   return { sx: 1 + Math.sin(t * 0.4) * 0.09, sy: 1 - Math.sin(t * 0.4) * 0.13, rot: 0 };
+    case 'crying':     return { sx: 0.95, sy: 0.9, rot: Math.sin(t * 0.15) * 0.09 };
+    case 'determined': return { sx: 1.08, sy: 0.94, rot: -0.07 };
+    case 'victory':    return { sx: 1.1 + Math.sin(t * 0.3) * 0.08, sy: 1.1 + Math.sin(t * 0.3) * 0.08, rot: Math.sin(t * 0.2) * 0.12 };
+    default: return null;
+  }
+}
+
+// Extra cartoon effects drawn over the face: tears, sweat drops, sparkles.
+function drawExprOverlay(x, y, r, expr, isCat) {
+  const t = game.frame;
+  const eyeX = r * 0.38;
+  ctx.save();
+  if ((!isCat && expr === 'crying') || (isCat && expr === 'guilty')) {
+    ctx.fillStyle = '#4dabf7';
+    for (const s of [-1, 1]) {
+      const drop = (t * 1.5 + (s > 0 ? 12 : 0)) % (r * 0.9);
+      ctx.beginPath();
+      ctx.ellipse(x + s * eyeX, y + r * 0.15 + drop, r * 0.09, r * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if ((!isCat && expr === 'shocked') || (isCat && expr === 'scared')) {
+    ctx.fillStyle = '#74c0fc';
+    for (const s of [-1, 1]) {
+      const fly = (t * 2 + (s > 0 ? 8 : 0)) % (r * 0.7);
+      ctx.beginPath();
+      ctx.ellipse(x + s * (r * 0.95 + fly * 0.6), y - r * 0.5 - fly * 0.4, r * 0.08, r * 0.12, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if ((!isCat && expr === 'victory') || (isCat && expr === 'proud')) {
+    ctx.font = Math.round(r * 0.5) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < 3; i++) {
+      const a = t * 0.06 + i * (Math.PI * 2 / 3);
+      ctx.fillText('✨', x + Math.cos(a) * r * 1.35, y + Math.sin(a) * r * 1.1);
+    }
+  }
+  ctx.restore();
+}
+
 function drawFaceCircle(x, y, r, key, expr, isCat) {
   const photo = faceImages[key];
+  const fx = exprFx(expr, isCat);
   ctx.save();
+  if (fx) {
+    ctx.translate(x, y);
+    ctx.rotate(fx.rot);
+    ctx.scale(fx.sx, fx.sy);
+    ctx.translate(-x, -y);
+  }
   if (photo) {
+    ctx.save();
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     ctx.drawImage(photo, x - r, y - r, r * 2, r * 2);
     ctx.restore();
-    ctx.save();
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#5c3c00';
     ctx.stroke();
-    ctx.restore();
+  } else if (isCat) {
+    drawCatFace(x, y, r, expr);
+  } else {
+    drawKidFace(x, y, r, expr);
+  }
+  ctx.restore();
+  drawExprOverlay(x, y, r, expr, isCat);
+  if (photo) {
     // reaction bubble next to photo faces
     const emoji = isCat ? CAT_EXPR[expr].emoji : KID_EXPR[expr].emoji;
     if ((isCat && expr !== 'sneaky') || (!isCat && expr !== 'happy')) {
       drawEmojiBubble(x + r + 4, y - r - 4, emoji);
     }
-    return;
   }
-  ctx.restore();
-  if (isCat) drawCatFace(x, y, r, expr);
-  else drawKidFace(x, y, r, expr);
 }
 
 function drawEmojiBubble(x, y, emoji) {
@@ -827,8 +894,8 @@ function drawKid(x, footY, char, expr, runPhase, airborne, stumbling) {
   ctx.lineWidth = 8;
   ctx.beginPath(); ctx.moveTo(-10, -78); ctx.lineTo(-10 + Math.sin(armSwing) * 18, -58 + Math.cos(armSwing) * 6); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(10, -78); ctx.lineTo(10 - Math.sin(armSwing) * 18, -58 - Math.cos(armSwing) * 6); ctx.stroke();
-  // face
-  drawFaceCircle(0, -112, 26, char.id, expr, false);
+  // face — comically oversized on purpose
+  drawFaceCircle(0, -118, 34, char.id, expr, false);
   ctx.restore();
 }
 
@@ -874,12 +941,12 @@ function drawCat(x, footY, expr, runPhase, frozen, lookingBack) {
   if (!game.caught) {
     ctx.font = '20px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🍪', lookingBack ? -34 : 40, -66);
+    ctx.fillText('🍪', lookingBack ? -40 : 46, -72);
   }
-  // face (flips when looking back at the player)
+  // face (flips when looking back at the player) — big and cheeky
   ctx.save();
   if (lookingBack) ctx.scale(-1, 1);
-  drawFaceCircle(lookingBack ? -22 : 22, -72, 20, 'cat', expr, true);
+  drawFaceCircle(lookingBack ? -24 : 24, -80, 27, 'cat', expr, true);
   ctx.restore();
   ctx.restore();
 }
@@ -1316,7 +1383,7 @@ function renderCharCards() {
     const card = document.createElement('div');
     card.className = 'card' + (char === selectedChar ? ' selected' : '');
     const cv = document.createElement('canvas');
-    cv.width = 120; cv.height = 150;
+    cv.width = 130; cv.height = 175;
     card.appendChild(cv);
     const name = document.createElement('div');
     name.className = 'name'; name.textContent = char.name;
@@ -1330,7 +1397,7 @@ function renderCharCards() {
     const prevSel = selectedChar;
     selectedChar = char; // drawKidFace reads selectedChar for skin/hair
     ctx = cv.getContext('2d');
-    drawKid(60, 145, char, 'happy', 0.6, false, false);
+    drawKid(65, 170, char, 'happy', 0.6, false, false);
     ctx = mainCtx;
     selectedChar = prevSel;
   }
