@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Run Kitty Run!</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif; background: #2b1d4e; }
+  #wrap { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  #game { background: #87ceeb; display: block; max-width: 100%; max-height: 100%; touch-action: manipulation; }
+  .screen {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; text-align: center;
+    background: linear-gradient(180deg, #6a4fc7 0%, #b06ab3 60%, #ff9a8b 100%);
+    color: #fff; z-index: 10; padding: 20px;
+  }
+  .hidden { display: none; }
+  h1.logo {
+    font-size: clamp(40px, 9vw, 84px); line-height: 1;
+    color: #ffe066; text-shadow: 4px 4px 0 #e8590c, 8px 8px 0 rgba(0,0,0,.25);
+    transform: rotate(-3deg);
+  }
+  .tagline { font-size: clamp(16px, 3vw, 24px); color: #fff3bf; text-shadow: 2px 2px 0 rgba(0,0,0,.3); }
+  .big-btn {
+    font-family: inherit; font-size: clamp(22px, 4vw, 34px); font-weight: bold;
+    padding: 16px 48px; border: none; border-radius: 50px; cursor: pointer;
+    background: linear-gradient(180deg, #ffd43b, #f59f00); color: #5c3c00;
+    box-shadow: 0 6px 0 #b06e00, 0 10px 20px rgba(0,0,0,.3);
+    transition: transform .1s;
+  }
+  .big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b06e00; }
+  .big-btn.green { background: linear-gradient(180deg, #8ce99a, #37b24d); color: #0b3d17; box-shadow: 0 6px 0 #1d6b30, 0 10px 20px rgba(0,0,0,.3); }
+  .big-btn.green:active { box-shadow: 0 2px 0 #1d6b30; }
+  .small-btn {
+    font-family: inherit; font-size: 15px; padding: 8px 18px; border: none; border-radius: 30px;
+    cursor: pointer; background: rgba(255,255,255,.25); color: #fff; border: 2px solid rgba(255,255,255,.6);
+  }
+  .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  .card {
+    background: rgba(255,255,255,.15); border: 3px solid rgba(255,255,255,.5); border-radius: 20px;
+    padding: 16px 20px; cursor: pointer; width: 190px; transition: transform .15s, border-color .15s, background .15s;
+  }
+  .card:hover { transform: scale(1.05); }
+  .card.selected { border-color: #ffe066; background: rgba(255,224,102,.25); transform: scale(1.08); }
+  .card canvas { display: block; margin: 0 auto 8px; }
+  .card .name { font-size: 20px; font-weight: bold; }
+  .card .power { font-size: 13px; color: #ffe9a8; margin-top: 4px; }
+  .face-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .face-slot { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; }
+  .face-slot .preview {
+    width: 64px; height: 64px; border-radius: 50%; border: 3px dashed rgba(255,255,255,.7);
+    background: rgba(255,255,255,.15); overflow: hidden; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  .face-slot .preview img { width: 100%; height: 100%; object-fit: cover; }
+  .story {
+    max-width: 560px; font-size: clamp(14px, 2.4vw, 19px); line-height: 1.5;
+    background: rgba(0,0,0,.25); border-radius: 16px; padding: 14px 22px;
+  }
+  .result-face { font-size: 90px; line-height: 1; animation: bounce .8s infinite alternate; }
+  @keyframes bounce { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-14px) rotate(4deg); } }
+  .stats { font-size: clamp(18px, 3.4vw, 26px); background: rgba(0,0,0,.25); border-radius: 16px; padding: 12px 30px; }
+  .stats b { color: #ffe066; }
+  #hint { position: absolute; bottom: 12px; width: 100%; text-align: center; color: rgba(255,255,255,.85); font-size: 14px; z-index: 5; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,.6); font-family: inherit; }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- START SCREEN -->
+  <div id="screen-start" class="screen">
+    <h1 class="logo">🐱 Run Kitty Run!</h1>
+    <p class="tagline">The naughty cat stole your biscuit... CATCH IT!</p>
+    <div class="story">One naughty cat keeps stealing things and escaping through the house.
+      Chase it, jump over obstacles, grab treats and power-ups, and catch that kitty before the timer runs out!</div>
+    <button class="big-btn" id="btn-play">▶ PLAY</button>
+    <button class="small-btn" id="btn-faces">📸 Add real faces</button>
+  </div>
+
+  <!-- FACE UPLOAD SCREEN -->
+  <div id="screen-faces" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,48px)">📸 Real Faces!</h1>
+    <p class="tagline">Put your family's real faces on the characters (optional & saved on this device only)</p>
+    <div class="face-row">
+      <div class="face-slot">
+        <div class="preview" data-face="kid1">🙂</div>
+        <span>Kid 1</span>
+      </div>
+      <div class="face-slot">
+        <div class="preview" data-face="kid2">😄</div>
+        <span>Kid 2</span>
+      </div>
+      <div class="face-slot">
+        <div class="preview" data-face="cat">😼</div>
+        <span>The Cat</span>
+      </div>
+    </div>
+    <input type="file" id="face-input" accept="image/*">
+    <button class="small-btn" id="btn-clear-faces">🗑 Remove all photos</button>
+    <button class="big-btn green" id="btn-faces-done">Done ✔</button>
+  </div>
+
+  <!-- CHARACTER SELECT -->
+  <div id="screen-chars" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,48px)">Pick your hero!</h1>
+    <div class="cards" id="char-cards"></div>
+    <button class="big-btn green" id="btn-start-level">GO! 🏃</button>
+  </div>
+
+  <!-- LEVEL INTRO -->
+  <div id="screen-level" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,52px)" id="level-title">Level 1</h1>
+    <p class="tagline" id="level-desc"></p>
+    <div class="result-face" id="level-face">😼</div>
+    <div class="story" id="level-story"></div>
+    <button class="big-btn" id="btn-go">CHASE! 🏃💨</button>
+  </div>
+
+  <!-- WIN SCREEN -->
+  <div id="screen-win" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,52px)">🎉 KITTY CAUGHT! 🎉</h1>
+    <div class="result-face">😸🙌😆</div>
+    <div class="stats" id="win-stats"></div>
+    <button class="big-btn green" id="btn-next">Next Level ➡</button>
+  </div>
+
+  <!-- LOSE SCREEN -->
+  <div id="screen-lose" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,52px)">😿 Kitty escaped!</h1>
+    <div class="result-face">😭😾💨</div>
+    <div class="stats" id="lose-stats"></div>
+    <button class="big-btn" id="btn-retry">🔁 Try Again</button>
+    <button class="small-btn" id="btn-menu">Back to menu</button>
+  </div>
+
+  <!-- GAME COMPLETE -->
+  <div id="screen-done" class="screen hidden">
+    <h1 class="logo" style="font-size:clamp(28px,6vw,52px)">🏆 YOU WIN! 🏆</h1>
+    <p class="tagline">The biscuit is safe... for now. The kitty is already plotting its next heist!</p>
+    <div class="result-face">😻👑🍪</div>
+    <div class="stats" id="done-stats"></div>
+    <button class="big-btn" id="btn-again">Play Again 🔁</button>
+  </div>
+
+  <div id="hint" class="hidden"></div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+//  RUN KITTY RUN — a family chase mini-game
+//  Auto-run, tap to jump (tap again mid-air for double jump),
+//  catch the cheeky cat before the timer runs out.
+// ============================================================
+
+const canvas = document.getElementById('game');
+let ctx = canvas.getContext('2d'); // reassigned temporarily to draw character previews
+const mainCtx = ctx;
+
+const W = 960, H = 540;          // logical game resolution
+const GROUND_Y = H - 80;         // top of the floor
+const GRAVITY = 0.85;
+
+function fitCanvas() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.width = W; canvas.height = H;
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+
+// ------------------------------------------------------------
+// Face photos (optional, stored locally)
+// ------------------------------------------------------------
+const faceImages = { kid1: null, kid2: null, cat: null };
+
+function loadStoredFaces() {
+  for (const key of Object.keys(faceImages)) {
+    const data = localStorage.getItem('rkr-face-' + key);
+    if (data) {
+      const img = new Image();
+      img.onload = () => { faceImages[key] = img; refreshFacePreviews(); renderCharCards(); };
+      img.src = data;
+    }
+  }
+}
+
+function refreshFacePreviews() {
+  document.querySelectorAll('.preview').forEach(el => {
+    const key = el.dataset.face;
+    if (faceImages[key]) {
+      el.innerHTML = '<img src="' + faceImages[key].src + '" alt="">';
+    } else {
+      el.textContent = key === 'cat' ? '😼' : (key === 'kid1' ? '🙂' : '😄');
+    }
+  });
+}
+
+let pendingFaceKey = null;
+const faceInput = document.getElementById('face-input');
+document.querySelectorAll('.preview').forEach(el => {
+  el.addEventListener('click', () => { pendingFaceKey = el.dataset.face; faceInput.click(); });
+});
+faceInput.addEventListener('change', () => {
+  const file = faceInput.files[0];
+  if (!file || !pendingFaceKey) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Downscale to keep localStorage small
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      const size = 160;
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      const s = Math.min(img.width, img.height);
+      g.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      const data = c.toDataURL('image/jpeg', 0.85);
+      try { localStorage.setItem('rkr-face-' + pendingFaceKey, data); } catch (err) { /* storage full — still usable this session */ }
+      const finalImg = new Image();
+      finalImg.onload = () => { faceImages[pendingFaceKey] = finalImg; refreshFacePreviews(); renderCharCards(); };
+      finalImg.src = data;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  faceInput.value = '';
+});
+document.getElementById('btn-clear-faces').addEventListener('click', () => {
+  for (const key of Object.keys(faceImages)) {
+    faceImages[key] = null;
+    localStorage.removeItem('rkr-face-' + key);
+  }
+  refreshFacePreviews();
+  renderCharCards();
+});
+
+// ------------------------------------------------------------
+// Characters
+// ------------------------------------------------------------
+const CHARACTERS = [
+  { id: 'kid1', name: 'Dash', power: '⚡ Runs faster', shirt: '#e8590c', shorts: '#1971c2', skin: '#ffd8b5', speedBonus: 0.08, jumpBonus: 0 },
+  { id: 'kid2', name: 'Hop',  power: '🦘 Jumps higher', shirt: '#37b24d', shorts: '#862e9c', skin: '#f5c9a6', speedBonus: 0, jumpBonus: 2.2 },
+];
+let selectedChar = CHARACTERS[0];
+
+// ------------------------------------------------------------
+// Expressions — procedural cartoon faces + emoji reaction bubbles
+// ------------------------------------------------------------
+const KID_EXPR = {
+  happy:      { mouth: 'smile',  eyes: 'open',  emoji: '😊' },
+  determined: { mouth: 'grit',   eyes: 'angry', emoji: '😤' },
+  shocked:    { mouth: 'o',      eyes: 'wide',  emoji: '😱' },
+  laughing:   { mouth: 'laugh',  eyes: 'happy', emoji: '😂' },
+  crying:     { mouth: 'frown',  eyes: 'cry',   emoji: '😭' },
+  victory:    { mouth: 'laugh',  eyes: 'happy', emoji: '🤩' },
+};
+const CAT_EXPR = {
+  sneaky:   { emoji: '😼' },
+  laughing: { emoji: '😹' },
+  scared:   { emoji: '🙀' },
+  guilty:   { emoji: '😿' },
+  proud:    { emoji: '😸' },
+  sleepy:   { emoji: '😴' },
+};
+
+// ------------------------------------------------------------
+// Levels
+// ------------------------------------------------------------
+const LEVELS = [
+  {
+    name: 'Level 1 — Living Room',
+    desc: 'The kitty grabbed the biscuit and bolted behind the sofa!',
+    story: 'Jump over toys and cushions. Tap to jump, tap again in the air for a double jump!',
+    time: 45,
+    startGap: 340,
+    catSpeed: 5.78,
+    sky: ['#ffe8cc', '#ffd8a8'],
+    wall: '#f3d9b1',
+    floor: '#b08968',
+    floorTop: '#c9a074',
+    obstacleEvery: [70, 130],
+    obstacles: ['toyblock', 'cushion', 'toycar'],
+    props: 'living',
+  },
+  {
+    name: 'Level 2 — Kitchen',
+    desc: 'The kitty skidded across the kitchen floor with YOUR fish snack!',
+    story: 'Watch out for bowls, chairs and rolling fruit. The floor is slippery and the kitty is faster!',
+    time: 50,
+    startGap: 380,
+    catSpeed: 5.82,
+    sky: ['#d0ebff', '#a5d8ff'],
+    wall: '#e7f5ff',
+    floor: '#748ffc',
+    floorTop: '#91a7ff',
+    obstacleEvery: [60, 115],
+    obstacles: ['bowl', 'chair', 'fruit'],
+    props: 'kitchen',
+  },
+  {
+    name: 'Level 3 — Garden',
+    desc: 'Last chance! The kitty is heading for the fence gap with the house key!',
+    story: 'Dodge flower pots and the hose. Catch the kitty before it escapes forever!',
+    time: 55,
+    startGap: 420,
+    catSpeed: 5.85,
+    sky: ['#8ed1fc', '#d3f9d8'],
+    wall: null,
+    floor: '#5c940d',
+    floorTop: '#74b816',
+    obstacleEvery: [55, 105],
+    obstacles: ['pot', 'hose', 'toyblock'],
+    props: 'garden',
+  },
+];
+
+// ------------------------------------------------------------
+// Game state
+// ------------------------------------------------------------
+const game = {
+  running: false,
+  levelIndex: 0,
+  level: LEVELS[0],
+  score: 0,
+  totalScore: 0,
+  timeLeft: 0,
+  distanceRun: 0,     // world scroll position
+  gap: 0,             // distance between player and cat
+  caught: false,
+  catchAnim: 0,
+  frame: 0,
+  nextObstacle: 0,
+  nextPickup: 0,
+  obstacles: [],
+  pickups: [],
+  particles: [],
+  popups: [],
+  // player
+  player: {
+    x: 150, y: GROUND_Y, vy: 0,
+    onGround: true, jumpsLeft: 2,
+    stumble: 0, boost: 0, expr: 'happy', exprTimer: 0,
+  },
+  // cat
+  cat: { frozen: 0, expr: 'sneaky', exprTimer: 0, lookBack: 0 },
+  shake: 0,
+};
+
+// The cat runs only slightly slower than the player, so the gap closes
+// gradually over the level. Power-ups and stumbles nudge the relative speed.
+function playerSpeed() {
+  let s = 6.0 + selectedChar.speedBonus;
+  if (game.player.boost > 0) s += 0.9;
+  if (game.player.stumble > 0) s -= 1.5;
+  return s;
+}
+function catSpeed() {
+  if (game.caught) return 0;
+  let s = game.level.catSpeed;
+  if (game.cat.frozen > 0) s *= 0.88; // milk makes the kitty drowsy and slow
+  return s;
+}
+
+function setKidExpr(name, frames) {
+  game.player.expr = name;
+  game.player.exprTimer = frames;
+}
+function setCatExpr(name, frames) {
+  game.cat.expr = name;
+  game.cat.exprTimer = frames;
+}
+
+// ------------------------------------------------------------
+// Obstacles & pickups
+// ------------------------------------------------------------
+const OBSTACLE_DEFS = {
+  toyblock: { w: 42, h: 42, draw: drawToyBlock },
+  cushion:  { w: 66, h: 34, draw: drawCushion },
+  toycar:   { w: 56, h: 30, draw: drawToyCar },
+  bowl:     { w: 54, h: 26, draw: drawBowl },
+  chair:    { w: 50, h: 78, draw: drawChair },
+  fruit:    { w: 34, h: 34, draw: drawFruit, rolling: true },
+  pot:      { w: 46, h: 48, draw: drawPot },
+  hose:     { w: 90, h: 22, draw: drawHose },
+};
+
+const PICKUP_DEFS = {
+  treat:  { emoji: '🍪', points: 10,  weight: 45, label: '+10' },
+  mouse:  { emoji: '🐭', points: 25,  weight: 20, label: '+25' },
+  fish:   { emoji: '🐟', points: 5,   weight: 15, label: 'SPEED!' },
+  milk:   { emoji: '🥛', points: 5,   weight: 12, label: 'FREEZE!' },
+  paw:    { emoji: '🐾', points: 0,   weight: 8,  label: '+5s' },
+};
+
+function randRange(a, b) { return a + Math.random() * (b - a); }
+
+function pickWeighted(defs) {
+  const entries = Object.entries(defs);
+  const total = entries.reduce((s, [, d]) => s + d.weight, 0);
+  let r = Math.random() * total;
+  for (const [key, d] of entries) {
+    r -= d.weight;
+    if (r <= 0) return key;
+  }
+  return entries[0][0];
+}
+
+function spawnObstacle() {
+  const type = game.level.obstacles[Math.floor(Math.random() * game.level.obstacles.length)];
+  const def = OBSTACLE_DEFS[type];
+  game.obstacles.push({
+    type, x: game.distanceRun + W + 100,
+    w: def.w, h: def.h,
+    vx: def.rolling ? -randRange(1.5, 3) : 0,
+    roll: 0,
+  });
+}
+
+function spawnPickup() {
+  const type = pickWeighted(PICKUP_DEFS);
+  const high = Math.random() < 0.4;
+  game.pickups.push({
+    type, x: game.distanceRun + W + 100,
+    y: GROUND_Y - (high ? randRange(90, 150) : randRange(24, 50)),
+    bob: Math.random() * Math.PI * 2,
+  });
+}
+
+// ------------------------------------------------------------
+// Input
+// ------------------------------------------------------------
+function tryJump() {
+  if (!game.running || game.caught) return;
+  const p = game.player;
+  if (p.jumpsLeft > 0) {
+    const base = p.onGround ? 15.5 : 12.5;
+    p.vy = -(base + selectedChar.jumpBonus);
+    p.onGround = false;
+    p.jumpsLeft--;
+    spawnParticles(p.x, GROUND_Y, 5, '#ffffff');
+  }
+}
+canvas.addEventListener('pointerdown', tryJump);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); tryJump(); }
+});
+
+// ------------------------------------------------------------
+// Update
+// ------------------------------------------------------------
+function update() {
+  const p = game.player;
+  const cat = game.cat;
+  game.frame++;
+
+  if (!game.caught) {
+    game.timeLeft -= 1 / 60;
+    if (game.timeLeft <= 0) { endLevel(false); return; }
+  }
+
+  // timers
+  if (p.stumble > 0) p.stumble--;
+  if (p.boost > 0) p.boost--;
+  if (cat.frozen > 0) cat.frozen--;
+  if (p.exprTimer > 0) { p.exprTimer--; if (p.exprTimer === 0) p.expr = 'happy'; }
+  if (cat.exprTimer > 0) { cat.exprTimer--; if (cat.exprTimer === 0) cat.expr = 'sneaky'; }
+  if (game.shake > 0) game.shake--;
+
+  // world scroll
+  const ps = playerSpeed();
+  game.distanceRun += ps;
+  game.gap += catSpeed() - ps;
+  game.gap = Math.max(0, Math.min(game.gap, game.level.startGap * 1.35));
+
+  // near-catch tension faces
+  if (!game.caught && game.gap < 130 && cat.exprTimer === 0) setCatExpr('scared', 30);
+  if (!game.caught && game.gap < 130 && p.exprTimer === 0) setKidExpr('determined', 30);
+
+  // cat looks back at the player now and then
+  if (game.frame % 180 === 0) cat.lookBack = 50;
+  if (cat.lookBack > 0) cat.lookBack--;
+
+  // player physics
+  p.vy += GRAVITY;
+  p.y += p.vy;
+  if (p.y >= GROUND_Y) {
+    p.y = GROUND_Y; p.vy = 0;
+    if (!p.onGround) spawnParticles(p.x, GROUND_Y, 4, '#d9c7a8');
+    p.onGround = true; p.jumpsLeft = 2;
+  }
+
+  // caught!
+  if (!game.caught && game.gap <= 4) {
+    game.caught = true;
+    game.catchAnim = 90;
+    setKidExpr('victory', 999);
+    setCatExpr('guilty', 999);
+    spawnParticles(p.x + 120, GROUND_Y - 40, 30, '#ffd43b');
+    addPopup(p.x + 90, GROUND_Y - 120, 'GOTCHA!', '#ffd43b', 36);
+  }
+  if (game.caught) {
+    game.catchAnim--;
+    if (game.catchAnim <= 0) { endLevel(true); return; }
+  }
+
+  // spawn obstacles & pickups
+  if (!game.caught) {
+    game.nextObstacle -= ps;
+    if (game.nextObstacle <= 0) {
+      spawnObstacle();
+      game.nextObstacle = randRange(...game.level.obstacleEvery) * 4;
+    }
+    game.nextPickup -= ps;
+    if (game.nextPickup <= 0) {
+      spawnPickup();
+      game.nextPickup = randRange(400, 780);
+    }
+  }
+
+  // update obstacles + collision
+  const px = game.distanceRun + p.x;
+  for (let i = game.obstacles.length - 1; i >= 0; i--) {
+    const o = game.obstacles[i];
+    o.x += o.vx;
+    if (o.vx !== 0) o.roll += 0.15;
+    if (o.x < game.distanceRun - 200) { game.obstacles.splice(i, 1); continue; }
+    // collision box (forgiving)
+    const hitX = px + 16 > o.x - o.w / 2 && px - 16 < o.x + o.w / 2;
+    const hitY = p.y > GROUND_Y - o.h + 6;
+    if (hitX && hitY && p.stumble === 0 && !game.caught) {
+      p.stumble = 30;
+      game.gap += 45;
+      game.shake = 14;
+      setKidExpr('shocked', 60);
+      setCatExpr('laughing', 70);
+      spawnParticles(p.x, p.y - 30, 12, '#fa5252');
+      addPopup(p.x, p.y - 90, 'OOF!', '#fa5252', 28);
+    }
+  }
+
+  // update pickups + collection
+  for (let i = game.pickups.length - 1; i >= 0; i--) {
+    const c = game.pickups[i];
+    c.bob += 0.08;
+    if (c.x < game.distanceRun - 100) { game.pickups.splice(i, 1); continue; }
+    const dx = c.x - px, dy = (c.y + Math.sin(c.bob) * 6) - (p.y - 40);
+    if (dx * dx + dy * dy < 42 * 42 && !game.caught) {
+      collectPickup(c);
+      game.pickups.splice(i, 1);
+    }
+  }
+
+  // particles & popups
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const pt = game.particles[i];
+    pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.3; pt.life--;
+    if (pt.life <= 0) game.particles.splice(i, 1);
+  }
+  for (let i = game.popups.length - 1; i >= 0; i--) {
+    const pop = game.popups[i];
+    pop.y -= 1; pop.life--;
+    if (pop.life <= 0) game.popups.splice(i, 1);
+  }
+}
+
+function collectPickup(c) {
+  const def = PICKUP_DEFS[c.type];
+  game.score += def.points;
+  addPopup(game.player.x, c.y - 30, def.label, '#ffe066', 24);
+  spawnParticles(game.player.x, c.y, 8, '#ffd43b');
+  if (c.type === 'fish') {
+    game.player.boost = 110;
+    setKidExpr('laughing', 80);
+  } else if (c.type === 'milk') {
+    game.cat.frozen = 120;
+    setCatExpr('sleepy', 120);
+    setKidExpr('laughing', 60);
+  } else if (c.type === 'paw') {
+    game.timeLeft += 5;
+    setKidExpr('happy', 40);
+  } else {
+    setKidExpr('happy', 30);
+  }
+}
+
+function spawnParticles(x, y, n, color) {
+  for (let i = 0; i < n; i++) {
+    game.particles.push({
+      x, y,
+      vx: randRange(-3, 3), vy: randRange(-6, -1),
+      life: randRange(20, 40), color,
+    });
+  }
+}
+function addPopup(x, y, text, color, size) {
+  game.popups.push({ x, y, text, color, size, life: 60 });
+}
+
+// ------------------------------------------------------------
+// Drawing helpers
+// ------------------------------------------------------------
+function drawFaceCircle(x, y, r, key, expr, isCat) {
+  const photo = faceImages[key];
+  ctx.save();
+  if (photo) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(photo, x - r, y - r, r * 2, r * 2);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#5c3c00';
+    ctx.stroke();
+    ctx.restore();
+    // reaction bubble next to photo faces
+    const emoji = isCat ? CAT_EXPR[expr].emoji : KID_EXPR[expr].emoji;
+    if ((isCat && expr !== 'sneaky') || (!isCat && expr !== 'happy')) {
+      drawEmojiBubble(x + r + 4, y - r - 4, emoji);
+    }
+    return;
+  }
+  ctx.restore();
+  if (isCat) drawCatFace(x, y, r, expr);
+  else drawKidFace(x, y, r, expr);
+}
+
+function drawEmojiBubble(x, y, emoji) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.beginPath();
+  ctx.arc(x, y, 16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#5c3c00';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = '18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, x, y + 1);
+  ctx.restore();
+}
+
+function drawKidFace(x, y, r, exprName) {
+  const e = KID_EXPR[exprName] || KID_EXPR.happy;
+  ctx.save();
+  // head
+  ctx.fillStyle = selectedChar.skin;
+  ctx.strokeStyle = '#8a5a30';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  // hair
+  ctx.fillStyle = selectedChar.id === 'kid1' ? '#5c3a1e' : '#111';
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.25, r, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.fill();
+  const ex = r * 0.38, ey = -r * 0.1;
+  // eyes
+  ctx.fillStyle = '#222';
+  if (e.eyes === 'wide') {
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.22, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#222';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.08, 0, Math.PI * 2); ctx.fill(); }
+  } else if (e.eyes === 'happy') {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey + 2, r * 0.16, Math.PI, 0); ctx.stroke(); }
+  } else if (e.eyes === 'angry') {
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.11, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(x + s * (ex - r * 0.2), y + ey - r * 0.28 + (s < 0 ? 0 : -r * 0.08));
+      ctx.lineTo(x + s * (ex + r * 0.18), y + ey - r * 0.2 - (s < 0 ? 0 : -r * 0.08) * 0);
+      ctx.stroke();
+    }
+  } else if (e.eyes === 'cry') {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.16, 0, Math.PI); ctx.stroke(); }
+    ctx.fillStyle = '#4dabf7';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + s * ex, y + ey + r * 0.35, r * 0.07, r * 0.18, 0, 0, Math.PI * 2); ctx.fill(); }
+  } else {
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.11, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // mouth
+  const my = y + r * 0.42;
+  ctx.strokeStyle = '#7a3b12'; ctx.lineWidth = 3; ctx.fillStyle = '#c9184a';
+  if (e.mouth === 'smile') {
+    ctx.beginPath(); ctx.arc(x, my - r * 0.12, r * 0.3, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  } else if (e.mouth === 'laugh') {
+    ctx.beginPath(); ctx.arc(x, my - r * 0.1, r * 0.32, 0, Math.PI); ctx.fill(); ctx.stroke();
+  } else if (e.mouth === 'o') {
+    ctx.beginPath(); ctx.ellipse(x, my, r * 0.16, r * 0.22, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  } else if (e.mouth === 'grit') {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x - r * 0.28, my - r * 0.1, r * 0.56, r * 0.18);
+    ctx.strokeRect(x - r * 0.28, my - r * 0.1, r * 0.56, r * 0.18);
+  } else if (e.mouth === 'frown') {
+    ctx.beginPath(); ctx.arc(x, my + r * 0.25, r * 0.28, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCatFace(x, y, r, exprName) {
+  ctx.save();
+  // ears
+  ctx.fillStyle = '#f59f00';
+  ctx.strokeStyle = '#a86800';
+  ctx.lineWidth = 2.5;
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * r * 0.35, y - r * 0.65);
+    ctx.lineTo(x + s * r * 0.95, y - r * 1.35);
+    ctx.lineTo(x + s * r * 0.95, y - r * 0.45);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+  // head
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  // stripes
+  ctx.strokeStyle = '#d9480f'; ctx.lineWidth = 3;
+  for (const s of [-1, 0, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * r * 0.3 - r * 0.1, y - r * 0.95);
+    ctx.lineTo(x + s * r * 0.3, y - r * 0.6);
+    ctx.stroke();
+  }
+  const ex = r * 0.4, ey = -r * 0.15;
+  ctx.fillStyle = '#222';
+  if (exprName === 'scared') {
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.24, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#222';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey, r * 0.07, 0, Math.PI * 2); ctx.fill(); }
+  } else if (exprName === 'sleepy') {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + s * ex - r * 0.15, y + ey); ctx.lineTo(x + s * ex + r * 0.15, y + ey); ctx.stroke(); }
+  } else if (exprName === 'laughing') {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey + 2, r * 0.17, Math.PI, 0); ctx.stroke(); }
+  } else if (exprName === 'guilty') {
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 3;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * ex, y + ey + r * 0.1, r * 0.15, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+  } else {
+    // sneaky / proud — half-closed eyes
+    ctx.fillStyle = '#2b8a3e';
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(x + s * ex, y + ey, r * 0.16, r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#222';
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(x + s * ex, y + ey, r * 0.05, r * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // nose + mouth
+  ctx.fillStyle = '#e64980';
+  ctx.beginPath();
+  ctx.moveTo(x, y + r * 0.15);
+  ctx.lineTo(x - r * 0.1, y + r * 0.02);
+  ctx.lineTo(x + r * 0.1, y + r * 0.02);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#7a3b12'; ctx.lineWidth = 2.5;
+  if (exprName === 'laughing') {
+    ctx.fillStyle = '#c9184a';
+    ctx.beginPath(); ctx.arc(x, y + r * 0.35, r * 0.25, 0, Math.PI); ctx.fill(); ctx.stroke();
+  } else if (exprName === 'guilty') {
+    ctx.beginPath(); ctx.arc(x, y + r * 0.62, r * 0.2, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke();
+  } else {
+    // cheeky smirk
+    ctx.beginPath();
+    ctx.moveTo(x, y + r * 0.18);
+    ctx.quadraticCurveTo(x + r * 0.2, y + r * 0.42, x + r * 0.42, y + r * 0.3);
+    ctx.stroke();
+  }
+  // whiskers
+  ctx.strokeStyle = '#a86800'; ctx.lineWidth = 1.5;
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * r * 0.35, y + r * (0.1 + i * 0.12));
+    ctx.lineTo(x + s * r * 1.15, y + r * (0.02 + i * 0.16));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ------------------------------------------------------------
+// Character drawing
+// ------------------------------------------------------------
+function drawKid(x, footY, char, expr, runPhase, airborne, stumbling) {
+  ctx.save();
+  ctx.translate(x, footY);
+  if (stumbling) ctx.rotate(Math.sin(game.frame * 0.5) * 0.12);
+  const legSwing = airborne ? 0.7 : Math.sin(runPhase) * 0.8;
+  const armSwing = airborne ? -1.2 : Math.sin(runPhase + Math.PI) * 0.9;
+  // legs
+  ctx.strokeStyle = char.shorts;
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(Math.sin(legSwing) * 16, -8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(-Math.sin(legSwing) * 16, -8); ctx.stroke();
+  // shoes
+  ctx.fillStyle = '#343a40';
+  ctx.beginPath(); ctx.ellipse(Math.sin(legSwing) * 16 + 5, -6, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-Math.sin(legSwing) * 16 + 5, -6, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // body
+  ctx.fillStyle = char.shirt;
+  ctx.strokeStyle = shade(char.shirt, -30);
+  ctx.lineWidth = 2.5;
+  roundRect(-16, -86, 32, 44, 10);
+  ctx.fill(); ctx.stroke();
+  // arms
+  ctx.strokeStyle = char.skin;
+  ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(-10, -78); ctx.lineTo(-10 + Math.sin(armSwing) * 18, -58 + Math.cos(armSwing) * 6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(10, -78); ctx.lineTo(10 - Math.sin(armSwing) * 18, -58 - Math.cos(armSwing) * 6); ctx.stroke();
+  // face
+  drawFaceCircle(0, -112, 26, char.id, expr, false);
+  ctx.restore();
+}
+
+function drawCat(x, footY, expr, runPhase, frozen, lookingBack) {
+  ctx.save();
+  ctx.translate(x, footY);
+  if (frozen) {
+    ctx.globalAlpha = 0.9;
+    // ZZZ
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#4dabf7';
+    ctx.fillText('Z z z', 20, -95);
+  }
+  const legSwing = Math.sin(runPhase * 1.4) * 0.9 * (frozen ? 0.35 : 1);
+  // tail
+  ctx.strokeStyle = '#f59f00';
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-24, -40);
+  ctx.quadraticCurveTo(-48, -55 + Math.sin(game.frame * 0.1) * 8, -42, -80 + Math.sin(game.frame * 0.1) * 10);
+  ctx.stroke();
+  // legs
+  for (const [ox, phase] of [[-14, 0], [14, Math.PI], [-6, Math.PI * 0.5], [6, Math.PI * 1.5]]) {
+    ctx.beginPath();
+    ctx.moveTo(ox, -30);
+    ctx.lineTo(ox + Math.sin(legSwing + phase) * 10, -4);
+    ctx.stroke();
+  }
+  // body
+  ctx.fillStyle = '#f59f00';
+  ctx.strokeStyle = '#a86800';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(0, -38, 30, 20, 0, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  // stripes on body
+  ctx.strokeStyle = '#d9480f'; ctx.lineWidth = 3;
+  for (const ox of [-12, 0, 12]) {
+    ctx.beginPath(); ctx.moveTo(ox, -55); ctx.quadraticCurveTo(ox + 3, -44, ox, -34); ctx.stroke();
+  }
+  // stolen item held in mouth area (a biscuit!)
+  if (!game.caught) {
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🍪', lookingBack ? -34 : 40, -66);
+  }
+  // face (flips when looking back at the player)
+  ctx.save();
+  if (lookingBack) ctx.scale(-1, 1);
+  drawFaceCircle(lookingBack ? -22 : 22, -72, 20, 'cat', expr, true);
+  ctx.restore();
+  ctx.restore();
+}
+
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
+  const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// ------------------------------------------------------------
+// Obstacle drawing (x = screen x of centre, ground-anchored)
+// ------------------------------------------------------------
+function drawToyBlock(x, o) {
+  const s = o.w;
+  ctx.fillStyle = '#f03e3e';
+  ctx.strokeStyle = '#a61e1e';
+  ctx.lineWidth = 3;
+  roundRect(x - s / 2, GROUND_Y - s, s, s, 6);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('A', x, GROUND_Y - s / 2 + 8);
+}
+function drawCushion(x, o) {
+  ctx.fillStyle = '#845ef7';
+  ctx.strokeStyle = '#5f3dc4';
+  ctx.lineWidth = 3;
+  roundRect(x - o.w / 2, GROUND_Y - o.h, o.w, o.h, 14);
+  ctx.fill(); ctx.stroke();
+}
+function drawToyCar(x, o) {
+  ctx.fillStyle = '#fab005';
+  ctx.strokeStyle = '#b07d02';
+  ctx.lineWidth = 3;
+  roundRect(x - o.w / 2, GROUND_Y - o.h, o.w, o.h - 8, 8);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#343a40';
+  ctx.beginPath(); ctx.arc(x - o.w / 4, GROUND_Y - 6, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + o.w / 4, GROUND_Y - 6, 7, 0, Math.PI * 2); ctx.fill();
+}
+function drawBowl(x, o) {
+  ctx.fillStyle = '#e64980';
+  ctx.strokeStyle = '#a61e4d';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - o.w / 2, GROUND_Y - o.h);
+  ctx.quadraticCurveTo(x, GROUND_Y + 8, x + o.w / 2, GROUND_Y - o.h);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+}
+function drawChair(x, o) {
+  ctx.strokeStyle = '#8d5524';
+  ctx.fillStyle = '#b06e2a';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  // legs
+  ctx.beginPath(); ctx.moveTo(x - o.w / 2 + 6, GROUND_Y); ctx.lineTo(x - o.w / 2 + 6, GROUND_Y - o.h + 30); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + o.w / 2 - 6, GROUND_Y); ctx.lineTo(x + o.w / 2 - 6, GROUND_Y - o.h + 30); ctx.stroke();
+  // seat
+  roundRect(x - o.w / 2, GROUND_Y - o.h + 22, o.w, 10, 4);
+  ctx.fill();
+  // back
+  roundRect(x + o.w / 2 - 10, GROUND_Y - o.h - 10, 10, 36, 4);
+  ctx.fill();
+}
+function drawFruit(x, o) {
+  ctx.save();
+  ctx.translate(x, GROUND_Y - o.h / 2);
+  ctx.rotate(o.roll);
+  ctx.font = '30px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🍊', 0, 2);
+  ctx.restore();
+}
+function drawPot(x, o) {
+  ctx.fillStyle = '#d9480f';
+  ctx.strokeStyle = '#962f06';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - o.w / 2, GROUND_Y - o.h + 14);
+  ctx.lineTo(x + o.w / 2, GROUND_Y - o.h + 14);
+  ctx.lineTo(x + o.w / 2 - 8, GROUND_Y);
+  ctx.lineTo(x - o.w / 2 + 8, GROUND_Y);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.font = '24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🌼', x, GROUND_Y - o.h + 6);
+}
+function drawHose(x, o) {
+  ctx.strokeStyle = '#2b8a3e';
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - o.w / 2, GROUND_Y - 6);
+  ctx.quadraticCurveTo(x - o.w / 6, GROUND_Y - o.h - 8, x + o.w / 6, GROUND_Y - 8);
+  ctx.quadraticCurveTo(x + o.w / 3, GROUND_Y - o.h, x + o.w / 2, GROUND_Y - 6);
+  ctx.stroke();
+}
+
+// ------------------------------------------------------------
+// Background per level
+// ------------------------------------------------------------
+function drawBackground() {
+  const lv = game.level;
+  const scroll = game.distanceRun;
+  // sky / wall gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  grad.addColorStop(0, lv.sky[0]);
+  grad.addColorStop(1, lv.sky[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, GROUND_Y);
+
+  if (lv.props === 'living') {
+    // wallpaper stripes
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    const off = -(scroll * 0.3) % 120;
+    for (let x = off; x < W; x += 120) ctx.fillRect(x, 0, 40, GROUND_Y);
+    // windows + furniture silhouettes
+    drawRepeating(scroll * 0.5, 500, (x, i) => {
+      if (i % 2 === 0) {
+        ctx.fillStyle = '#a5d8ff';
+        ctx.strokeStyle = '#748ffc'; ctx.lineWidth = 6;
+        ctx.fillRect(x, 70, 130, 110);
+        ctx.strokeRect(x, 70, 130, 110);
+        ctx.beginPath(); ctx.moveTo(x + 65, 70); ctx.lineTo(x + 65, 180); ctx.stroke();
+      } else {
+        // sofa
+        ctx.fillStyle = '#9775fa';
+        roundRect(x, GROUND_Y - 100, 190, 100, 18);
+        ctx.fill();
+        ctx.fillStyle = '#845ef7';
+        roundRect(x + 15, GROUND_Y - 130, 160, 50, 14);
+        ctx.fill();
+      }
+    });
+  } else if (lv.props === 'kitchen') {
+    // tiles
+    ctx.strokeStyle = 'rgba(116,143,252,.3)';
+    ctx.lineWidth = 2;
+    const off = -(scroll * 0.3) % 70;
+    for (let x = off; x < W; x += 70) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GROUND_Y); ctx.stroke(); }
+    for (let y = 0; y < GROUND_Y; y += 70) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    // counters and fridge
+    drawRepeating(scroll * 0.5, 560, (x, i) => {
+      if (i % 2 === 0) {
+        ctx.fillStyle = '#ced4da';
+        ctx.fillRect(x, GROUND_Y - 200, 110, 200);
+        ctx.fillStyle = '#adb5bd';
+        ctx.fillRect(x + 8, GROUND_Y - 190, 94, 80);
+        ctx.fillRect(x + 8, GROUND_Y - 100, 94, 90);
+      } else {
+        ctx.fillStyle = '#e8590c';
+        ctx.fillRect(x, GROUND_Y - 120, 220, 120);
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(x, GROUND_Y - 132, 220, 14);
+        ctx.fillStyle = '#343a40';
+        for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(x + 30 + k * 50, GROUND_Y - 148, 10, 0, Math.PI * 2); ctx.fill(); }
+      }
+    });
+  } else {
+    // garden — sun, clouds, fence, bushes
+    ctx.fillStyle = '#ffd43b';
+    ctx.beginPath(); ctx.arc(W - 110, 80, 45, 0, Math.PI * 2); ctx.fill();
+    drawRepeating(scroll * 0.2, 420, (x) => {
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      for (const [ox, oy, r] of [[0, 0, 26], [26, -12, 30], [56, 0, 24]]) {
+        ctx.beginPath(); ctx.arc(x + ox, 110 + oy, r, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+    // fence
+    ctx.fillStyle = '#d0a35c';
+    const off = -(scroll * 0.55) % 46;
+    for (let x = off; x < W; x += 46) {
+      roundRect(x, GROUND_Y - 130, 30, 130, 5);
+      ctx.fill();
+    }
+    ctx.fillRect(0, GROUND_Y - 110, W, 12);
+    ctx.fillRect(0, GROUND_Y - 60, W, 12);
+    // bushes
+    drawRepeating(scroll * 0.7, 380, (x) => {
+      ctx.fillStyle = '#2f9e44';
+      for (const [ox, r] of [[0, 30], [34, 38], [70, 28]]) {
+        ctx.beginPath(); ctx.arc(x + ox, GROUND_Y - 14, r, Math.PI, 0); ctx.fill();
+      }
+    });
+  }
+
+  // floor
+  ctx.fillStyle = lv.floorTop;
+  ctx.fillRect(0, GROUND_Y, W, 14);
+  ctx.fillStyle = lv.floor;
+  ctx.fillRect(0, GROUND_Y + 14, W, H - GROUND_Y - 14);
+  // floor boards / texture scrolling
+  ctx.strokeStyle = 'rgba(0,0,0,.15)';
+  ctx.lineWidth = 3;
+  const boardOff = -(scroll % 90);
+  for (let x = boardOff; x < W; x += 90) {
+    ctx.beginPath(); ctx.moveTo(x, GROUND_Y); ctx.lineTo(x - 14, H); ctx.stroke();
+  }
+}
+
+function drawRepeating(scroll, spacing, fn) {
+  const first = Math.floor(scroll / spacing);
+  for (let i = first; i <= first + Math.ceil(W / spacing) + 1; i++) {
+    fn(i * spacing - scroll, ((i % 2) + 2) % 2);
+  }
+}
+
+// ------------------------------------------------------------
+// HUD
+// ------------------------------------------------------------
+function drawHUD() {
+  ctx.save();
+  ctx.font = 'bold 26px "Comic Sans MS", sans-serif';
+  ctx.textBaseline = 'top';
+  // score
+  ctx.textAlign = 'left';
+  outlinedText('⭐ ' + game.score, 18, 14, '#ffe066');
+  // timer
+  const t = Math.max(0, Math.ceil(game.timeLeft));
+  ctx.textAlign = 'center';
+  outlinedText('⏱ ' + t + 's', W / 2, 14, t <= 10 && game.frame % 40 < 20 ? '#ff6b6b' : '#ffffff');
+  // catch meter
+  const meterW = 220, mx = W - meterW - 18, my = 22;
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 16px "Comic Sans MS", sans-serif';
+  outlinedText('🏃 catch the kitty! 🐱', W - 18, 0, '#fff');
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  roundRect(mx, my, meterW, 16, 8);
+  ctx.fill();
+  const closeness = 1 - Math.min(1, game.gap / game.level.startGap);
+  ctx.fillStyle = closeness > 0.75 ? '#51cf66' : closeness > 0.4 ? '#ffd43b' : '#ff8787';
+  if (closeness > 0.02) {
+    roundRect(mx + 2, my + 2, (meterW - 4) * Math.max(0.02, closeness), 12, 6);
+    ctx.fill();
+  }
+  // status icons
+  ctx.textAlign = 'left';
+  ctx.font = '20px sans-serif';
+  let ix = 18, iy = 50;
+  if (game.player.boost > 0) { ctx.fillText('⚡ SPEED', ix, iy); iy += 26; }
+  if (game.cat.frozen > 0) { ctx.fillText('💤 kitty snoozing', ix, iy); }
+  ctx.restore();
+}
+function outlinedText(text, x, y, color) {
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(0,0,0,.55)';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+// ------------------------------------------------------------
+// Render
+// ------------------------------------------------------------
+function render() {
+  ctx.save();
+  if (game.shake > 0) {
+    ctx.translate(randRange(-4, 4), randRange(-4, 4));
+  }
+  drawBackground();
+
+  // pickups
+  for (const c of game.pickups) {
+    const sx = c.x - game.distanceRun;
+    if (sx < -60 || sx > W + 60) continue;
+    const y = c.y + Math.sin(c.bob) * 6;
+    ctx.font = '30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // glow
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffe066';
+    ctx.beginPath(); ctx.arc(sx, y, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.fillText(PICKUP_DEFS[c.type].emoji, sx, y);
+  }
+
+  // obstacles
+  for (const o of game.obstacles) {
+    const sx = o.x - game.distanceRun;
+    if (sx < -120 || sx > W + 120) continue;
+    OBSTACLE_DEFS[o.type].draw(sx, o);
+  }
+
+  // cat — screen position derived from the gap
+  const p = game.player;
+  const catScreenX = Math.min(p.x + 90 + game.gap, W - 70);
+  const far = game.gap > W - p.x - 160;
+  ctx.save();
+  if (far) { // shrink slightly when far away
+    ctx.translate(catScreenX, GROUND_Y);
+    ctx.scale(0.8, 0.8);
+    ctx.translate(-catScreenX, -GROUND_Y);
+  }
+  let catY = GROUND_Y;
+  if (game.caught) catY = GROUND_Y - Math.max(0, Math.sin(game.catchAnim * 0.15) * 20);
+  drawCat(catScreenX, catY, game.cat.expr, game.frame * 0.35, game.cat.frozen > 0, game.cat.lookBack > 0 || game.caught);
+  ctx.restore();
+
+  // player
+  drawKid(p.x, p.y, selectedChar, p.expr, game.frame * 0.3, !p.onGround, p.stumble > 0);
+
+  // catch celebration hearts
+  if (game.caught && game.frame % 8 === 0) {
+    addPopup(catScreenX + randRange(-40, 40), GROUND_Y - randRange(60, 120), ['🎉', '⭐', '❤'][Math.floor(Math.random() * 3)], '#fff', 26);
+  }
+
+  // particles
+  for (const pt of game.particles) {
+    ctx.globalAlpha = Math.min(1, pt.life / 20);
+    ctx.fillStyle = pt.color;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // popups
+  for (const pop of game.popups) {
+    ctx.font = 'bold ' + pop.size + 'px "Comic Sans MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = Math.min(1, pop.life / 20);
+    outlinedText(pop.text, pop.x, pop.y, pop.color);
+    ctx.globalAlpha = 1;
+  }
+
+  drawHUD();
+  ctx.restore();
+}
+
+// ------------------------------------------------------------
+// Game loop
+// ------------------------------------------------------------
+function loop() {
+  if (!game.running) return;
+  update();
+  if (game.running) render();
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------------------------------------
+// Level / screen flow
+// ------------------------------------------------------------
+const screens = {};
+for (const el of document.querySelectorAll('.screen')) screens[el.id] = el;
+function showScreen(id) {
+  for (const el of Object.values(screens)) el.classList.add('hidden');
+  if (id) screens[id].classList.remove('hidden');
+  document.getElementById('hint').classList.toggle('hidden', id !== null);
+}
+
+function startLevel(index) {
+  game.levelIndex = index;
+  game.level = LEVELS[index];
+  game.score = 0;
+  game.timeLeft = game.level.time;
+  game.distanceRun = 0;
+  game.gap = game.level.startGap;
+  game.caught = false;
+  game.catchAnim = 0;
+  game.frame = 0;
+  game.obstacles = [];
+  game.pickups = [];
+  game.particles = [];
+  game.popups = [];
+  game.nextObstacle = 500;
+  game.nextPickup = 250;
+  Object.assign(game.player, { y: GROUND_Y, vy: 0, onGround: true, jumpsLeft: 2, stumble: 0, boost: 0, expr: 'happy', exprTimer: 0 });
+  Object.assign(game.cat, { frozen: 0, expr: 'sneaky', exprTimer: 0, lookBack: 0 });
+  showScreen(null);
+  document.getElementById('hint').textContent = 'TAP or SPACE to jump • tap again mid-air to double jump';
+  game.running = true;
+  requestAnimationFrame(loop);
+}
+
+function endLevel(won) {
+  game.running = false;
+  const timeBonus = won ? Math.ceil(game.timeLeft) * 5 : 0;
+  const levelScore = game.score + timeBonus;
+  if (won) {
+    game.totalScore += levelScore;
+    const isLast = game.levelIndex >= LEVELS.length - 1;
+    if (isLast) {
+      const best = Number(localStorage.getItem('rkr-best') || 0);
+      if (game.totalScore > best) localStorage.setItem('rkr-best', game.totalScore);
+      document.getElementById('done-stats').innerHTML =
+        'Final score: <b>' + game.totalScore + '</b><br>Best ever: <b>' + Math.max(best, game.totalScore) + '</b>';
+      showScreen('screen-done');
+    } else {
+      document.getElementById('win-stats').innerHTML =
+        'Treats: <b>' + game.score + '</b> &nbsp; Time bonus: <b>+' + timeBonus + '</b><br>Level score: <b>' + levelScore + '</b>';
+      showScreen('screen-win');
+    }
+  } else {
+    document.getElementById('lose-stats').innerHTML =
+      'So close! You collected <b>' + game.score + '</b> points.<br>The kitty ran off with the loot... 😾';
+    showScreen('screen-lose');
+  }
+}
+
+function showLevelIntro(index) {
+  game.pendingLevel = index;
+  const lv = LEVELS[index];
+  document.getElementById('level-title').textContent = lv.name;
+  document.getElementById('level-desc').textContent = lv.desc;
+  document.getElementById('level-story').textContent = lv.story;
+  document.getElementById('level-face').textContent = ['😼🍪', '😹🐟', '🙀🔑'][index] || '😼';
+  showScreen('screen-level');
+}
+
+// ------------------------------------------------------------
+// Character select cards
+// ------------------------------------------------------------
+function renderCharCards() {
+  const holder = document.getElementById('char-cards');
+  holder.innerHTML = '';
+  for (const char of CHARACTERS) {
+    const card = document.createElement('div');
+    card.className = 'card' + (char === selectedChar ? ' selected' : '');
+    const cv = document.createElement('canvas');
+    cv.width = 120; cv.height = 150;
+    card.appendChild(cv);
+    const name = document.createElement('div');
+    name.className = 'name'; name.textContent = char.name;
+    card.appendChild(name);
+    const power = document.createElement('div');
+    power.className = 'power'; power.textContent = char.power;
+    card.appendChild(power);
+    card.addEventListener('click', () => { selectedChar = char; renderCharCards(); });
+    holder.appendChild(card);
+    // draw a mini preview by pointing the shared ctx at the card's canvas
+    const prevSel = selectedChar;
+    selectedChar = char; // drawKidFace reads selectedChar for skin/hair
+    ctx = cv.getContext('2d');
+    drawKid(60, 145, char, 'happy', 0.6, false, false);
+    ctx = mainCtx;
+    selectedChar = prevSel;
+  }
+}
+
+// ------------------------------------------------------------
+// Wire up buttons
+// ------------------------------------------------------------
+document.getElementById('btn-play').addEventListener('click', () => { renderCharCards(); showScreen('screen-chars'); });
+document.getElementById('btn-faces').addEventListener('click', () => { refreshFacePreviews(); showScreen('screen-faces'); });
+document.getElementById('btn-faces-done').addEventListener('click', () => showScreen('screen-start'));
+document.getElementById('btn-start-level').addEventListener('click', () => { game.totalScore = 0; showLevelIntro(0); });
+document.getElementById('btn-go').addEventListener('click', () => startLevel(game.pendingLevel));
+document.getElementById('btn-next').addEventListener('click', () => showLevelIntro(game.levelIndex + 1));
+document.getElementById('btn-retry').addEventListener('click', () => showLevelIntro(game.levelIndex));
+document.getElementById('btn-menu').addEventListener('click', () => showScreen('screen-start'));
+document.getElementById('btn-again').addEventListener('click', () => { game.totalScore = 0; showLevelIntro(0); });
+
+game.pendingLevel = 0;
+loadStoredFaces();
+showScreen('screen-start');
+</script>
+</body>
+</html>
